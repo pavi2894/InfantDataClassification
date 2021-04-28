@@ -154,11 +154,11 @@ class F1_Score(tf.keras.metrics.Metric):
         for i in range(M.get_shape().as_list()[0]):
             val = tf.math.reduce_sum(M[:,i])
               
-            prec =(M[i,i])/(tf.math.reduce_sum(M[i,:]))
-            rec = M[i,i]/(tf.math.reduce_sum(M[:,i]))
+            prec =(M[i,i])/(tf.math.reduce_sum(M[i,:])+ 1e-15)
+            rec = M[i,i]/(tf.math.reduce_sum(M[:,i])+ 1e-15)
             prec = tf.where(tf.math.is_nan(prec), tf.zeros_like(prec), prec)
             rec = tf.where(tf.math.is_nan(rec), tf.zeros_like(rec), rec)
-            f1 = 2.0*prec*rec/(prec + rec+1e-6)
+            f1 = 2.0*prec*rec/(prec + rec+1e-15)
             f1 = tf.where(tf.math.is_nan(f1), tf.zeros_like(f1), f1)     
             f1 =  tf.cast(f1, 'float32')
             prec =  tf.cast(prec, 'float32')
