@@ -1,0 +1,50 @@
+randseed = 42
+self_supervised ='CPC'#'wav2vec' # 'CPC' #'wav2vec'
+use_batchnorm = False
+dropout1 = 0.3
+dropout2 = 0.3
+encoder_model = 'SENSOR_MODULE1' # 'CONVNET1' / 'SENSOR_MODULE1'
+timeseries_model = 'BGRU' # 'WaveNet' / 'GRU' / 'BGRU' / 'LSTM' / 'BLSTM'
+encoder_channels = [32, 32, 64, 64]
+timeseries_channels = [1,2,4] # For WaveNet
+Nlatent = 16#32#160 # Encoder output features
+Nlatent2 =64#40#16#32# 64 # Timeseries model channels/number of RNN elements
+use_autoencoder = False
+learning_rate = 1e-4
+use_lr_decay = False
+batch_size = 1#100
+verbose = False
+verbose2 = True
+filter_width = 5
+weight_type = 'sum_norm' # 'ones' / 'no_norm' / 'sum_norm' / 'mean_norm'
+winlen = 120
+frames_per_sample = 100 #No of frames that form one data sample, the input to training would be batchsize,Nframes/frames_per_sample,channel,win_len,
+hop = 60
+patience = 30
+epochs = 50#101#25#2#101
+
+folds =  3#1
+save_models = True
+channels = 24
+Nchans = 3
+Nsensors = 4
+Ncats = 9
+Ntrack = ['B']
+terms = 2
+NcatsA = 7
+test_babies = ['baby6', 'baby3', 'Kotimittaus_VAURAS47', 'Kotimittaus_VAURAS46', 'Kotimittaus_pilot1', 'baby7', 'baby9', 'baby11']
+NcatsB = 9
+testTrainRatio = 0.2
+# Augmentation options
+use_augmentation = True
+aug_syn = False
+aug_p_noise = 0.0
+aug_p_rotation = 0.75
+aug_p_chandropout = 0.25
+aug_p_time_warping = 0.0
+aug_p_dropout = 0.1
+
+# Test augmentation
+test_p_sample_dropout = 0.0
+test_sensor_dropout = [[1, 1, 1, 1]]
+test_packetloss = 0.0 

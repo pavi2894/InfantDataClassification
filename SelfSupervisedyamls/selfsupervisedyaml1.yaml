@@ -1,0 +1,45 @@
+
+self_supervised : CPC 
+CPC_k : all
+encoder_model : SENSOR_MODULE3 
+Nlatent2 : 64
+learning_rate : 1e-4
+use_lr_decay : False
+batch_size : 1 
+verbose : False
+verbose2 : True
+verbose2 : True
+filter_width : 5
+frames_per_sample : 100 
+negative_sample_size : 10 
+neg_sampling :  same_batch 
+CPC_folds :  7
+save_models : True
+Ncats : 9
+Ntrack : 
+   - B
+terms : 3
+NcatsA : 7
+NcatsB : 9
+testTrainRatio : 0.2
+use_augmentation : False
+aug_syn : False
+aug_p_noise : 0.0
+aug_p_rotation : 0.75
+aug_p_chandropout : 0.25
+aug_p_time_warping : 0.0
+aug_p_dropout : 0.1
+test_p_sample_dropout : 0.0
+test_sensor_dropout : [[1, 1, 1, 1]]
+test_packetloss : 0.0 
+
+ss_classifier : cnn
+SS_batch : 32
+Nlatent : 140
+latent_spaceDimensions : [140]
+curr_epoch : [45]
+terms_all : [3]
+epochs_self : 150
+cpc_epochs : 100
+model_dir  : FixCPCLossDebug/babies_cmp1/SM1/ALL/
+ss_model : WHATBestModels/NoFolds/ModifiedLoss/SM1/

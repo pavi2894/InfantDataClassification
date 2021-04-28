@@ -1,0 +1,43 @@
+
+self_supervised : CPC 
+CPC_k : all
+encoder_model : SENSOR_MODULE3 
+Nlatent2 : 64
+learning_rate : 1e-4
+use_lr_decay : False
+batch_size : 1 
+verbose : False
+verbose2 : True
+verbose2 : True
+filter_width : 5
+frames_per_sample : 100 
+negative_sample_size : 10 
+neg_sampling :  same_batch 
+folds :  2
+save_models : True
+Ncats : 9
+Ntrack : 
+   - B
+terms : 3
+NcatsA : 7
+NcatsB : 9
+testTrainRatio : 0.2
+use_augmentation : False
+aug_syn : False
+aug_p_noise : 0.0
+aug_p_rotation : 0.75
+aug_p_chandropout : 0.25
+aug_p_time_warping : 0.0
+aug_p_dropout : 0.1
+test_p_sample_dropout : 0.0
+test_sensor_dropout : [[1, 1, 1, 1]]
+test_packetloss : 0.0 
+
+Nlatent : 128
+latent_spaceDimensions : [128]
+curr_epoch : [0,2,4,6,8,10,12,14]
+terms_all : [15,10,5,20]
+epochs_self : 150
+cpc_epochs : 100
+TSNE_folder : TSNE_plots/all_k/SM1/Dim140_k3/
+model_dir  : FixCPCLossDebug/babies_cmp1/SM1/ALL/
