@@ -7,6 +7,8 @@ Supervised training :
  
  
 CPC
+
+
 python selfsupervisedtrainV2.py Selfsupervised/self*.yaml   for CPC training 
 
 python SS_classifier.py  SVMyamls/SVMyaml*.yaml  for CNN and wavenet supervised classification 
