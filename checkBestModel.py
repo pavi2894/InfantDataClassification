@@ -1,10 +1,17 @@
 
 import numpy as np
-
+import scipy.io as sio
 import operator
 import collections
+import sys
 folder = 'SM1FinalKfold_F1Dense_TrainigLossModels/'
 dense_softmax = {}
+
+ll =  'supervised_results/half_num_baby/B/train_loss_results0.mat'
+mat_contents = sio.loadmat(ll)
+print(sorted(mat_contents.keys()))
+print(mat_contents['train_loss_results']) 
+sys.exit()
 for i in [64,128,140,160,256,512,32]:
     dense_softmax_dict = np.load(folder+'Final_dict'+str(i)+'.npy',allow_pickle=True)
     dense_softmax_dict = eval(str(dense_softmax_dict))

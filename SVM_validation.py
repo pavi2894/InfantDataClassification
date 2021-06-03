@@ -11,7 +11,7 @@ from keras import backend as K
 import trainmodel_cpcV2 as modelcpc
 import labelsArrange as la
 import random
-import selfsupervisedtrain as train
+import selfsupervisedtrainV2 as train
 import os
 import sys
 from tensorflow.keras.metrics import Accuracy, BinaryAccuracy,Precision,Recall
@@ -35,7 +35,7 @@ from keras import backend as K
 import trainmodel_cpcV2 as modelcpc
 import labelsArrange as la
 import random
-import selfsupervisedtrain as train
+#import selfsupervisedtrain as train
 import os
 import sys
 import argparse
@@ -75,7 +75,8 @@ Ncats = config['Ncats']
 dependencies = {
     'SENSOR_MODULE3' : modelcpc.SENSOR_MODULE3,
     'SENSOR_MODULE1' : modelcpc.SENSOR_MODULE1,
-    'loss_compute': train.NCE_loss().loss_compute,
+    'SENSOR_MODULE3_Modified' : modelcpc.SENSOR_MODULE3_Modified,
+    'loss_compute': train.NCE_loss(config['terms_all']).loss_compute,
     'sensorEncoderModule':modelcpc.sensorEncoderModule,
     'WaveNet' : modelcpc.WaveNet,
     'Resblock' : modelcpc.Resblock
@@ -116,87 +117,97 @@ def getConfMatMetrics(M ,tars=None, preds=None, Ncats=None, return_avg=True):
     return f1# prec, rec, f1
 
 
-SVM_path = config['SVM_folder'] 
-def classifier(res_dir,cpc_model):
+SVM_path1 = config['SVM_folder'] 
+if not os.path.isdir(SVM_path1):
+            os.makedirs(SVM_path1,exist_ok=True)
+def classifier(res_dir,cpc_model,SVM_path):
     
-    model = keras.models.load_model(join(res_dir, cpc_model),custom_objects=dependencies)
-    model1 = model.layers[1]
-
+   model = keras.models.load_model(join(res_dir, cpc_model),custom_objects=dependencies)
+   model1 = model.layers[1]
+   val_fscore = []
+   for q in range(10):
+  
     ress = res_dir.replace('/','_')
-    x_test = np.load('testbaby_x_inp.npy')
+    x_test = np.load('Dtestbaby_x_inp_'+str(q)+'.npy')
     x_test = np.transpose(x_test,[0,2,1])
-    num = int(len(x_test)*0.8)
-    x_inp1 = x_test[:num,:,:] 
-    x_test =  x_test[num:,:,:]
+    #num = int(len(x_test)*0.8)
+    x_inp1 = np.load('Dbaby_x_inp_'+str(q)+'.npy')#x_test[:num,:,:] 
+    x_inp1 = np.transpose(x_inp1,[0,2,1])
+    #x_test =  x_test[num:,:,:]
     X = model1.predict(x_inp1)
     x_inp_test = model1.predict(x_test)
-    y_pos_test = np.load('testbaby_y_pos_oh.npy')
-    y_pos1 = y_pos_test[:num,:]
-    y_pos_test =y_pos_test[num:,:]
-    y_mov_test =  np.load('testbaby_y_mov_oh.npy' )
+    y_pos_test = np.load('Dtestbaby_y_pos_oh_'+str(q)+'.npy')
+    y_pos1 = np.load('Dbaby_y_pos_oh_'+str(q)+'.npy')#y_pos_test[:num,:]
+    #y_pos_test = y_pos_test[num:,:]
+    y_mov_test =  np.load('Dtestbaby_y_mov_oh_'+str(q)+'.npy' )
     y_mov_test = np.argmax(y_mov_test,axis = -1)
     y_mov_test = np.squeeze(y_mov_test)
-    y = y_mov_test[:num]
-    y_mov_test=y_mov_test[num:]
-    data_weight_test = np.load('testbaby_data_weights.npy')
-    data_weight1 = data_weight_test[num:]
-    data_weight_test  = data_weight_test[num:]
+    y = np.load('Dbaby_y_mov_oh_'+str(q)+'.npy' )#y_mov_test[:num]
+    y = np.argmax(y,axis = -1)
+    y = np.squeeze(y)
+
+    #y_mov_test=y_mov_test[num:]
+    data_weight_test = np.load('Dtestbaby_data_weights_'+str(q)+'.npy')
+    data_weight1 = np.load('Dbaby_data_weights_'+str(q)+'.npy') #data_weight_test[num:]
+    #data_weight_test  = data_weight_test[num:]
     X_train = X
     y_train = y
     X_test =  x_inp_test
     y_test = y_mov_test
-    linear = svm.SVC(kernel='linear', C=1, decision_function_shape='ovo').fit(X_train, y_train)
-    rbf = svm.SVC(kernel='rbf', gamma=1, C=1, decision_function_shape='ovo').fit(X_train, y_train)
-    poly = svm.SVC(kernel='poly', degree=3, C=1, decision_function_shape='ovo').fit(X_train, y_train)
-    sig = svm.SVC(kernel='sigmoid', C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    #linear = svm.SVC(kernel='linear', C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    #rbf = svm.SVC(kernel='rbf', gamma=1, C=1, decision_function_shape='ovo').fit(X_train, y_train)
+    poly = svm.SVC(kernel='poly', degree=3, C=1, decision_function_shape='ovo').fit(X_train, y_train,sample_weight = data_weight1)
+    #sig = svm.SVC(kernel='sigmoid', C=1, decision_function_shape='ovo').fit(X_train, y_train)
 
-    linear_pred = linear.predict(X_test)
+    #linear_pred = linear.predict(X_test)
     poly_pred = poly.predict(X_test)
-    rbf_pred = rbf.predict(X_test)
-    sig_pred = sig.predict(X_test)
-    accuracy_lin = linear.score(X_test, y_test)
+    #rbf_pred = rbf.predict(X_test)
+    #sig_pred = sig.predict(X_test)
+    #accuracy_lin = linear.score(X_test, y_test)
     accuracy_poly = poly.score(X_test, y_test)
-    accuracy_rbf = rbf.score(X_test, y_test)
-    accuracy_sig = sig.score(X_test, y_test)
+    #accuracy_rbf = rbf.score(X_test, y_test)
+    #accuracy_sig = sig.score(X_test, y_test)
     ress = res_dir.replace('/','_')
-    #mkdir SVM
-    f = open(SVM_path+ress+'.txt','a')
     if not os.path.isdir(SVM_path):
-                    os.makedirs(SVM_path,exist_ok=True)  
+              os.makedirs(SVM_path,exist_ok=True)
+    f = open(SVM_path+ress+'_Fold'+str(q)+'.txt','a')
+    #if not os.path.isdir(SVM_path):
+    #                os.makedirs(SVM_path,exist_ok=True)  
     f.write("Validation Accuracy : " + ress +  "\n")
-    f.write("Accuracy Linear Kernel:"+str(accuracy_lin)+"\n")
+    #f.write("Accuracy Linear Kernel:"+str(accuracy_lin)+"\n")
     f.write("Accuracy Polynomial Kernel:" + str(accuracy_poly)+"\n")
-    f.write("Accuracy Radial Basis Kernel:"+str(accuracy_rbf)+"\n")
-    f.write("Accuracy Sigmoid Kernel:"+ str(accuracy_sig)+"\n")
+    #f.write("Accuracy Radial Basis Kernel:"+str(accuracy_rbf)+"\n")
+    #f.write("Accuracy Sigmoid Kernel:"+ str(accuracy_sig)+"\n")
 # creating a confusion matrix
-    cm_lin = confusion_matrix(y_test, linear_pred)
+    #cm_lin = confusion_matrix(y_test, linear_pred)
     cm_poly = confusion_matrix(y_test, poly_pred)
-    target_names = ['class '+str(i) for i in np.arange(Ncats)]
-    predictions = np.argmax(rbf_pred,axis = -1)
+    target_names = [i for i in np.arange(Ncats)]
+    #predictions1 = np.argmax(linear_pred,axis = -1)
+    #predictions2 = np.argmax(poly_pred,axis = -1)
     targets = np.argmax(y_test,axis = -1)
-    cm_rbf = confusion_matrix(y_test, rbf_pred)
-    classification_report1 = classification_report(y_test, linear_pred,target_names= target_names)
-    classification_report2 = classification_report(y_test, poly_pred,target_names= target_names)
-    classification_report3 = classification_report(y_test, rbf_pred,target_names= target_names)
-    classification_report4 = classification_report(y_test, sig_pred,target_names= target_names)
-    f1  = precision_recall_fscore_support(y_test, rbf_pred,average = 'macro')
-    val_fscore = f1[2]
-    cm_rbf = confusion_matrix(y_test, rbf_pred)
-    cm_sig = confusion_matrix(y_test, sig_pred)
+    #cm_rbf = confusion_matrix(y_test, rbf_pred)
+    #classification_report1 = classification_report(y_test, linear_pred,labels= target_names)
+    classification_report2 = classification_report(y_test, poly_pred,labels= target_names)
+    #classification_report3 = classification_report(y_test, rbf_pred,target_names= target_names)
+    #classification_report4 = classification_report(y_test, sig_pred,target_names= target_names)
+    f1  = precision_recall_fscore_support(y_test, poly_pred,average = 'macro')
+    val_fscore.append(f1[2])
+    #cm_rbf = confusion_matrix(y_test, rbf_pred)
+    #cm_sig = confusion_matrix(y_test, sig_pred)
 
     f.write("\nValidation CM:" + ress+"\n")
-    f.write("Linar kernel:\n"+str(cm_lin)+"\n")
-    f.write("Linear kernel classification report"+"\n"+str(classification_report1)+"\n")
+    #f.write("Linar kernel:\n"+str(cm_lin)+"\n")
+    #f.write("Linear kernel classification report"+"\n"+str(classification_report1)+"\n")
     f.write("Polynomial Kernel\n:"+str(cm_poly)+"\n")
     f.write("polynomial kernel classification report"+"\n"+str(classification_report2)+"\n")
-    f.write("Radial Basis Kernel:\n"+str(cm_rbf)+"\n")#+str(classification_report3)+"\n")
-    f.write("Radial kernel classification report"+"\n"+str(classification_report3)+"\n")
-    f.write("Sigmoid Kernel:\n"+str(cm_sig)+"\n")
-    f.write("Sigmoid kernel classification report"+"\n"+str(classification_report4)+"\n")
+    #f.write("Radial Basis Kernel:\n"+str(cm_rbf)+"\n")#+str(classification_report3)+"\n")
+    #f.write("Radial kernel classification report"+"\n"+str(classification_report3)+"\n")
+    #f.write("Sigmoid Kernel:\n"+str(cm_sig)+"\n")
+    #f.write("Sigmoid kernel classification report"+"\n"+str(classification_report4)+"\n")
 
     ress = res_dir.replace('/','_') 
     f.close() 
-    return val_fscore
+   return np.mean(val_fscore)
 
 if __name__ == "__main__":
     
@@ -221,12 +232,18 @@ if __name__ == "__main__":
                             cpc_model='cpc_Models.h5'
                             res = res_dir +'epoch_'+ str(e)+'/'
                             ress = res.replace('/','_')
-                            val = classifier(res_dir = res_dir +'epoch_'+ str(e)+'/',cpc_model=cpc_model)
+                            SVM_path = SVM_path1 + str(j) + '/' + str(k) + '/' + str(e) + '/'
+                            if not os.path.isdir( SVM_path):
+                                 os.makedirs( SVM_path,exist_ok=True)
+                            val = classifier(res_dir = res_dir +'epoch_'+ str(e)+'/',cpc_model=cpc_model,SVM_path = SVM_path)
                             fscore_dict[ress] = val
                             #fscore_dict_final[ress] = [val,inf]
         res1 = SVM_path +str(j)+'/'
         if not os.path.isdir(res1):
                     os.makedirs(res1,exist_ok=True)                
         np.save(res1+"dict.npy",fscore_dict)
+        t = open(SVM_path + 'Avg_Metric_dict.txt','a')
+        t.write(SVM_path+'\n'+str(fscore_dict)+'\n\n')
+        t.close()
     #np.save("SVM/Final_dict.npy",fscore_dict_final)
 

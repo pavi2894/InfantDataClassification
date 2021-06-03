@@ -15,8 +15,9 @@ def getlabeledFileNames(babies,folder,data_folder,test = True,supervised = True)
     x_r = np.concatenate((acc_data/10.0, gyro_data/100.0),axis=1)
     x_r = sp.frame_sig(x_r,_CONF.winlen,_CONF.hop)
     if _CONF.use_augmentation:
-        x_r = aug.augment(x_r) 
-    #x_r = sp.preprocess_data(x_r)
+        x_r1 = aug.augment(x_r) 
+        #x_r = np.concatenate(( x_r, x_r1),axis=0)
+ 
     if supervised == True:
             movement_oh = io.loadmat(data_folder + babies[iBaby] + "/movement_oh.mat")['movement_oh'] 
             posture_oh = io.loadmat(data_folder + babies[iBaby] + "/posture_oh.mat")['posture_oh']
@@ -24,13 +25,19 @@ def getlabeledFileNames(babies,folder,data_folder,test = True,supervised = True)
             data_mask = np.squeeze(data_mask)
             mask = (1-np.squeeze(data_mask)).astype(bool) 
             y_A = sp.discretize_categories(posture_oh)
-            y_A = np.squeeze(y_A)[mask]
+            y_A = np.squeeze(y_A)#[mask]
             y_B = sp.discretize_categories(movement_oh)
             train_weights = sp.get_train_weights(y_B,'B',weight_type = _CONF.weight_type) 
-            y_B = np.squeeze(y_B)[mask]
+            y_B = np.squeeze(y_B)#[mask]
             #train_weights = sp.get_train_weights(y_B,'B',weight_type = _CONF.weight_type)
-            train_weights = np.squeeze(train_weights)[mask]
-            x_r = np.squeeze(x_r)[mask]
+            train_weights = np.squeeze(train_weights)#[mask]
+            x_r = np.squeeze(x_r)#[mask]
+            """if _CONF.use_augmentation:
+                  y_A = np.concatenate((y_A,y_A),axis=0)
+                  y_B = np.concatenate((y_B,y_B),axis=0)
+                  train_weights = np.concatenate((train_weights,train_weights),axis=0)
+                  data_mask = np.concatenate((data_mask,data_mask),axis=0)"""
+
             y_A = sp.preprocess_dataY(y_A,'A')
             y_B = sp.preprocess_dataY(y_B,'B')
             proc_train_weights = sp.preprocess_dataweight(train_weights)

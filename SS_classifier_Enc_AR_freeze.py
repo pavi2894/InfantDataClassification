@@ -18,7 +18,6 @@ import random
 import selfsupervisedtrainV3 as train
 import os
 import sys
-import cleaned_aux_module as sp
 from tensorflow.keras.metrics import Accuracy, BinaryAccuracy,Precision,Recall
 from sklearn.metrics import classification_report
 from sklearn.metrics import precision_recall_fscore_support
@@ -117,7 +116,7 @@ def getF1Metrics_numpy(M , return_avg=True):
         prec = np.nanmean(prec)
         rec = np.nanmean(rec)
         f1 = np.nanmean(f1)
-    return  acc,f1
+    return  f1
 
 class loss_classifier:#(tf.keras.losses.Loss):
 
@@ -177,17 +176,16 @@ class LossCustom(keras.losses.Loss):
 
 
 
-
-def loss_classifier1(y_true,y_pred):
+def loss_classifier1(y_true,y_pred,sw):
             Ncats = config['Ncats']
             weightsB= tf.constant([0.3152, 0.1163, 0.0144, 0.0136, 0.1181, 0.2363, 0.1756, 0.0047, 0.0057])
             weightsA = tf.constant([0.316200554295792,0.116301335348954,0.0148652053413958,0.0140589569160998,0.119198790627362,0.236470143613001,0.182905013857395])
             weightsB=tf.expand_dims(weightsB,axis =0)
             weightsA=tf.expand_dims(weightsA,axis =0) 
             #weightsB /= tf.reduce_sum(weightsB)
-            #weightsB = (1/weightsB)
+            #weightsB = (1/weightsB)   #Inverted and normalized by sum
             weight  = tf.linalg.matmul(y_true , weightsB,transpose_b = True )
-            loss_classifier_ = tf.reduce_mean(cce(y_true,y_pred) * weight)               
+            loss_classifier_ = tf.reduce_sum(cce(y_true,y_pred) * weight)               
             return  loss_classifier_
 
 def custom_loss(y_true,y_pred):#,sample_weight):
@@ -218,47 +216,6 @@ def custom_loss(y_true,y_pred):#,sample_weight):
                     weight * softmax )
             return loss_classifier_ 
             
-
-class LossCustom23(keras.losses.Loss):
-   def __init__(self,**kwargs):
-         super(LossCustom, self).__init__( name="")
-   def __call__(self, y_true, y_pred,sample_weight):
-            weightsB= tf.constant([0.3152, 0.1163, 0.0144, 0.0136, 0.1181, 0.2363, 0.1756, 0.0047, 0.0057])
-            #weightsA = tf.constant([0.316200554295792,0.116301335348954,0.0148652053413958,0.0140589569160998,0.119198790627362,0.236470143613001,0.182905013857395])
-            weightsB=tf.expand_dims(weightsB,axis =0)
-            #weightsA=tf.expand_dims(weightsA,axis =0)
-            sample_weight  = tf.linalg.matmul(y_true , weightsB,transpose_b = True )
-            #print(weight.shape, "weight")
-            #print(sample_weight.shape,"sample_weight")
-            #weight= sample_weight
-            
-            Ncats = _CONF.Ncats
-            #print("y_true,y_pred",y_true.shape,y_pred.shape)
-            if Ncats > 1:
-                sample_weight =  tf.cast(sample_weight, 'float32')
-                softmax =  tf.nn.softmax_cross_entropy_with_logits(
-                        labels=y_true,logits=y_pred)
-                #softmax = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true,logits=y_pred)
-                softmax =  tf.cast(softmax, 'float32')
-                #print("weight * softmax",weight.shape,softmax.shape)
-                #loss_classifier_ = tf.reduce_mean(
-                #    sample_weight * softmax )
-
-                loss_classifier_ = tf.reduce_mean(sample_weight *softmax )
-
-                #predictions = tf.argmax(y_pred,axis=1)
-                #targets = tf.argmax(y_true,axis=1)
-                #predictions = tf.cast(predictions, 'float32')
-                #targets = tf.cast(targets, 'float32')
-                #tf.print("predictions : ",predictions,"   targets:",targets)
-                #sm_logit_activations = tf.nn.softmax(y_pred)
-
-                #self.accuracy = tf.reduce_mean(tf.cast(tf.equal(predictions,targets),tf.float32))
-                #self.lossvalue = loss_classifier_
-
-                return  loss_classifier_
-
-
 
 def retTrue():
     return True
@@ -326,10 +283,24 @@ def classifier(res_dir,cpc_model,ffolder,latent):
 'baby23','baby24','baby25','baby26','baby3','baby4','baby5','baby6','baby7','baby8','baby9']
 
   model = keras.models.load_model(join(res_dir, cpc_model),custom_objects=dependencies)
-  model1 = model.layers[1]
-  model1.trainable = False
+  """model1 = model.layers[1]"""
+  """model1.trainable = False"""
   #model3  = model.layers[3]
-  print(model.layers[-1].get_layer(index=0))
+  #print(model.layers[-1].get_layer(index=0))
+
+  model2 = model.layers[1]
+  model2.trainable = False
+  XX = model.input
+  zz = model2(XX)
+  zz = tf.expand_dims(zz,axis = 0)
+  layer1 = model.layers[-1].get_layer(index=0)
+  layer1.trainable = False
+  YY = layer1(zz)
+  model1 = tf.keras.Model(XX, YY)
+  del model
+  print(model1.summary())
+
+
 
   
 
@@ -343,7 +314,7 @@ def classifier(res_dir,cpc_model,ffolder,latent):
   #XX = model1.input
   #YY = model3.output
   
-  XX = model.input
+  #XX = model.input
 
   """model2 = tf.keras.Model([XX], [YY])
   print(model2.summary())
@@ -358,21 +329,21 @@ def classifier(res_dir,cpc_model,ffolder,latent):
   #print(model2.summary())
   #print(model3)
   #del model
-  print("xx:",XX.shape) 
-  zz = model1(XX)
-  zz = tf.expand_dims(zz,axis = 0) 
-  layer1 = model.layers[-1].get_layer(index=0)  
-  layer1.trainable = False
-  YY = layer1(zz)
+  #print("xx:",XX.shape) 
+  #zz = model1(XX)
+  #zz = tf.expand_dims(zz,axis = 0) 
+  #layer1 = model.layers[-1].get_layer(index=0)  
+  #layer1.trainable = False
+  #YY = layer1(zz)
   
-  model_freeze = tf.keras.Model(XX, YY)
-  del model
-  print(model_freeze.summary())
-  #sys.exit() 
+  #model_freeze = tf.keras.Model(XX, YY)
+  """del model"""
+  #print(model_freeze.summary())
+  
   ress = res_dir.replace('/','_')
   g = open(ffolder+'ConfusionMatrix.txt','a')
   
-  batches = 64#64#config['SS_batch']
+  batches = 64#config['SS_batch']
    
   f_score_per_fold = []
   acc_per_fold = []
@@ -399,54 +370,48 @@ def classifier(res_dir,cpc_model,ffolder,latent):
         print("test_babies : ",test_babies)
         print("train_babies : ",train_babies) 
         x_inp1,y_mov1,data_weight1,y_pos1,mask_ = GD.generate_data(train_babies)
+        
         x_test,y_mov_test,data_weight_test,y_pos_test,tm_ = GD.generate_data(test_babies)
-        mask = (1-np.squeeze(mask_)).astype(bool)
+        print(data_weight1.shape, "mask.shape")   
+        mask = (1-np.squeeze(mask_)).astype(bool)        
         #data_weight1 = data_weight1 * mask
-        testmask = (1-np.squeeze(tm_)).astype(bool) 
+        testmask = (1-np.squeeze(tm_)).astype(bool)
+        #data_weight_test=  data_weight_test * testmask
+        #print("mask is",mask)
+        #print("AFTER",data_weight1.shape, mask.shape)
+        #sys.exit()
         g.write("test_babies :"+str(test_babies)+"\n")
         g.write("train_babies :"+str(train_babies)+"\n")
+        print(x_inp1.shape,"I am here to check this")
+        #print(y_mov1.shape,data_weight1.shape,y_pos1.shape,_.shape) 
 
         x_inp1 = np.transpose(x_inp1 ,[0,2,1])
         x_test = np.transpose(x_test,[0,2,1])
-        print(x_inp1.shape)
-        print(x_inp1[0].shape)
-        print(x_inp1[1943].shape) 
-        x_inp = model_freeze.predict(x_inp1,batch_size=100) 
-
-        x_inp_test = model_freeze.predict(x_test,batch_size=100)
-      
-
+        print("After transpose",x_inp1.shape)
+        #sys.exit()
+        #print(x_inp1[0].shape)
+        #print(x_inp1[1943].shape) 
+       
+        x_inp = model1.predict(x_inp1,batch_size=100)
         x_inp = tf.reshape(x_inp,(-1,config['Nlatent']))
-        x_inp_test = tf.reshape(x_inp_test ,(-1,config['Nlatent']))
-
-
-        #x_inp = model1.predict(x_inp1)
-        """x_inp = x_inp[mask]
+        #x_inp_test = tf.reshape(x_inp_test ,(-1,config['Nlatent'])) 
+        x_inp = x_inp[mask]
         y_mov1 = y_mov1[mask]
         data_weight1 = data_weight1[mask]
-        y_pos1 = y_pos1[mask]"""
-        #x_inp_test = model1.predict(x_test)
-        """x_inp_test =x_inp_test[testmask]
+        y_pos1 = y_pos1[mask]         
+        x_inp_test = model1.predict(x_test,batch_size=100)
+        x_inp_test = tf.reshape(x_inp_test ,(-1,config['Nlatent']))
+        x_inp_test =x_inp_test[testmask]
         y_mov_test = y_mov_test[testmask]
         data_weight_test = data_weight_test[testmask]
-        y_pos_test = y_pos_test[testmask]"""
-
-        
+        y_pos_test = y_pos_test[testmask]
         #print( x_inp.shape," x_inp ") 
-        #x_inp = tf.squeeze(x_inp)
+        x_inp = tf.squeeze(x_inp)
         x_input = tf.keras.layers.Input((config['Nlatent']))
         #x_input = tf.squeeze(x_input ,axis = 0)
         #input_shape = (config['frames_per_sample'],config['Nlatent'])
         #x_input = tf.keras.layers.Input((input_shape))
-        x_inp = tf.reshape(x_inp,(-1,100,config['Nlatent']))
-        x_inp_test = tf.reshape(x_inp_test ,(-1,100,config['Nlatent']))
-        y_mov1 = np.reshape(y_mov1, (-1,100,config['Ncats']))
-        y_mov_test = np.reshape(y_mov_test, (-1,100,config['Ncats']))
-        #y_mov1 =  sp.preprocess_dataY(y_mov1,'B')
-        #y_mov_test = sp.preprocess_dataY(y_mov_test,'B')
-        data_weight_test =  np.reshape(data_weight_test, (-1,100))
-        
-        data_weight1 =  np.reshape(data_weight1, (-1,100)) #sp.peereprocess_dataweight(data_weight1)
+      
         #x_inp = tf.reshape(x_inp ,[-1,config['frames_per_sample'],config['Nlatent']])
         #y_mov1 = tf.reshape(y_mov1 ,[-1,config['frames_per_sample'],config['Ncats']])
         #data_weight1 = tf.reshape(data_weight1,[-1,config['frames_per_sample']])
@@ -479,7 +444,6 @@ def classifier(res_dir,cpc_model,ffolder,latent):
             x_inp = tf.reshape(x_inp ,[-1,config['frames_per_sample'],config['Nlatent']])
             y_mov1 = tf.reshape(y_mov1 ,[-1,config['frames_per_sample'],config['Ncats']])
             data_weight1 = tf.reshape(data_weight1,[-1,config['frames_per_sample']])
-            data_weight_test = tf.reshape(data_weight_test,[-1,config['frames_per_sample']])
             x_inp_test = tf.reshape(x_inp_test,[-1,config['frames_per_sample'],config['Nlatent']])
             y_mov_test= tf.reshape(y_mov_test,[-1,config['frames_per_sample'],config['Ncats']])
             batches = 1
@@ -490,8 +454,8 @@ def classifier(res_dir,cpc_model,ffolder,latent):
             #x_input = tf.keras.layers.Input((config['frames_per_sample'],config['Nlatent'],1))
             timeseries_model = modelcpc.WaveNet("wavenet", residual_channels=_CONF.Nlatent2, output_channels=_CONF.NcatsB, input_channels=_CONF.Nlatent,
                 postproc_channels=_CONF.Nlatent2, dilations=_CONF.timeseries_channels, filter_width=5, dropout_rate=0.3)
-            #x_inp = tf.squeeze(x_inp)
-            #x_inp_test = tf.squeeze(x_inp_test )
+            x_inp = tf.squeeze(x_inp)
+            x_inp_test = tf.squeeze(x_inp_test )
             x = timeseries_model(x_input)
 
         elif config['ss_classifier'] == 'cnn':
@@ -504,48 +468,10 @@ def classifier(res_dir,cpc_model,ffolder,latent):
             x_inp_test = tf.reshape(x_inp_test,[-1,config['frames_per_sample'],config['Nlatent']])
             y_mov_test= tf.reshape(y_mov_test,[-1,config['frames_per_sample'],config['Ncats']])
             x = tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME',input_shape=(config['frames_per_sample'],config['Nlatent']))(x_input)
-            x = tf.keras.layers.Dense(units=config['Ncats'], activation='softmax')(x)
-         
-        elif config['ss_classifier'] == 'lstm':
-            batches = 1
-            input_shape = (config['frames_per_sample'],config['Nlatent'])
-            x_input = tf.keras.layers.Input((input_shape))
-            x_inp = tf.reshape(x_inp ,[-1,config['frames_per_sample'],config['Nlatent']])
-            y_mov1 = tf.reshape(y_mov1 ,[-1,config['frames_per_sample'],config['Ncats']])
-            data_weight1 = tf.reshape(data_weight1,[-1,config['frames_per_sample']])
-            x_inp_test = tf.reshape(x_inp_test,[-1,config['frames_per_sample'],config['Nlatent']])
-            y_mov_test= tf.reshape(y_mov_test,[-1,config['frames_per_sample'],config['Ncats']])
-            """x = tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME',input_shape=(config['frames_per_sample'],config['Nlatent']))(x_input)
-            x = tf.keras.layers.Dropout(0.3)(x)
-            x =  tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME')(x)
-            x = tf.keras.layers.Dropout(0.3)(x)
-            x = tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME')(x)            """
-            x = tf.keras.layers.LSTM(128, input_shape=(config['frames_per_sample'],config['Nlatent']),return_sequences=True)(x_input)
-            print(x.shape)
-            x = tf.keras.layers.Dropout(0.5)(x)  
-            x = tf.keras.layers.Dense(units=config['Nlatent'],activation = 'relu')(x)
-            x = tf.keras.layers.Dense(units=config['Ncats'],activation='softmax')(x)    
-        elif config['ss_classifier'] == 'convnet':
-            batches = 1
-            input_shape = (config['frames_per_sample'],config['Nlatent'])
-            x_input = tf.keras.layers.Input((input_shape))
-            x_inp = tf.reshape(x_inp ,[-1,config['frames_per_sample'],config['Nlatent']])
-            y_mov1 = tf.reshape(y_mov1 ,[-1,config['frames_per_sample'],config['Ncats']])
-            data_weight1 = tf.reshape(data_weight1,[-1,config['frames_per_sample']])
-            x_inp_test = tf.reshape(x_inp_test,[-1,config['frames_per_sample'],config['Nlatent']])
-            y_mov_test= tf.reshape(y_mov_test,[-1,config['frames_per_sample'],config['Ncats']])
-            x = tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME',input_shape=(config['frames_per_sample'],config['Nlatent']))(x_input)
-            x = tf.keras.layers.Dropout(0.3)(x)
-            x =  tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME')(x)
-            x = tf.keras.layers.Dropout(0.3)(x)
-            x = tf.keras.layers.Conv1D(128, 3, activation='relu',padding = 'SAME')(x)           
-            x = tf.keras.layers.Dense(units=config['Ncats'],activation='softmax')(x)
-           
-
+            x = tf.keras.layers.Dense(units=config['Ncats'], activation='softmax')(x) 
+            
         model = keras.models.Model(inputs=x_input, outputs=x)
         #model.compile(optimizer="Adam", loss= loss_classifier1, metrics=['accuracy',F1_Score()])
-        #model.compile(optimizer="Adam", loss=LossCustom(),metrics=['accuracy',F1_Score()])
-
         model.compile(optimizer="Adam", loss=LossCustom(),metrics=['accuracy',F1_Score()])
         print(model.summary())
         if not os.path.isdir(ffolder):
@@ -575,43 +501,32 @@ def classifier(res_dir,cpc_model,ffolder,latent):
                                 os.makedirs(ffolder +res_dir,exist_ok=True)
         model.save(join(ffolder +res_dir, 'CPC_classifier'+str(fold_no)+'.h5'))        
         #x_inp_test = model_freeze.predict(x_test,batch_size=100)
-        print("  x_inp_test : ",x_inp_test.shape,"   y_mov_test : ",y_mov_test.shape,"data_weight_test :", data_weight_test.shape)
-        #testscores = model.evaluate(x = x_inp_test,y=y_mov_test,batch_size=100,sample_weight = data_weight_test)
-        #y_pred_value =
-        #testacc_per_fold.append(testscores[1] * 100)
-        #testloss_per_fold.append(testscores[0])
+        print("  x_inp_test : ",x_inp_test.shape,"   y_mov_test : ",y_mov_test.shape)
+        testscores = model.evaluate(x=x_inp_test,y = y_mov_test,sample_weight = data_weight_test)
+        testacc_per_fold.append(testscores[1] * 100)
+        testloss_per_fold.append(testscores[0])
      
         target_names = [i for i in np.arange(config['Ncats'])]
-        print(target_names, "is the traget names")
-        if config['ss_classifier'] == 'wavenet':
-             predictions_y = model.predict(x_inp_test,batch_size = 1)
-        else: 
-             predictions_y = model.predict(x_inp_test)
-        print(predictions_y[0],"  is the prediction")
+      
+        predictions_y = model.predict(x_inp_test)
         targets = tf.reshape(y_mov_test ,[-1,config['Ncats']])
         predictions_y = tf.reshape(predictions_y,[-1,config['Ncats']])
         targets = tf.argmax(targets,axis = 1)
         #predictions = tf.argmax(predictions,axis = 1)
-        #testacc_per_fold.append(testscores[1] * 100)
-        #testloss_per_fold.append(testscores[0])testloss_per_fold.append(testscores[0])
+
         
         predictions = np.argmax(predictions_y,axis=-1)
         #targets = np.argmax(y_mov_test,axis=-1)
-        M = tf.math.confusion_matrix(targets[testmask],predictions[testmask],num_classes= config['Ncats'])
-        acc,f1_s = getF1Metrics_numpy(np.array(M))
-        testacc_per_fold.append(acc * 100)
-        testloss_per_fold.append(f1_s * 100)
-        f1 = precision_recall_fscore_support(targets[testmask],predictions[testmask],average = 'macro')
+        M = tf.math.confusion_matrix(targets,predictions,num_classes= config['Ncats'])
+        f1 = precision_recall_fscore_support(targets,predictions,average = 'macro')
         testf_score_per_fold.append(f1[2]* 100)
         
-        classification_report1 = classification_report(targets[testmask],predictions[testmask],labels= target_names)
-        print(M )      
-         
+        classification_report1 = classification_report(targets,predictions,labels= target_names)
+        print(classification_report1 )      
+  
         g.write("\n"+ress+"  Fold "+str(q)+":\n")
         g.write("\n\n The confusion matrix for inference Data is "  + str(M)+"\n\n")
         g.write("\n\n The classification report for inference data is " + str(classification_report1))
-        g.write("\n The F1 and accuracy predicted is acc: and f1:"+str(acc)+str(f1_s))
-        g.flush()
         fold_no = fold_no + 1
 
   f = open(ffolder + ress + "loss_history.txt", 'a')
@@ -625,7 +540,6 @@ def classifier(res_dir,cpc_model,ffolder,latent):
      f.write('------------------------------------------------------------------------\n')
      f.write("> Fold {"+ str(i+1) +"} - Loss: {" + str(testloss_per_fold[i]) + "} - Accuracy: {" +str(testacc_per_fold[i]) + "}  -  F1-Score: {" + str(testf_score_per_fold[i])+"}")
      f.write('\n')
-     f.flush()
   f.write('\n------------------------------------------------------------------------\n')
   f.write('NOT NEEDED Average scores for all folds on :\n')
   f.write('> F-Score:{' + str(np.mean(testf_score_per_fold))+ '}  (+- {'+str(np.std(testf_score_per_fold)) + '})\n')
@@ -664,7 +578,7 @@ if __name__ == "__main__":
     for j in latent_spaceDimensions: 
         accuracy_dict = {}     
         #ffolder = config['ss_model']+ config['encoder_model'] + config['CPC_k']+str(j)+config['ss_classifier']+'/'
-        ffolder = 'CNNClassifier_results/LSTM/'+CPC_k+ '/B/Dim_'+str(Dim)+'/'+'k'+str(term_num)+'/epoch_'+str(epochsNum)+ '/'+  sensor_enc_model+'/'+ss_classifier+'/'
+        #ffolder = 'OldClassifier_results/'+CPC_k+ '/B/Dim_'+str(Dim)+'/'+'k'+str(term_num)+'/epoch_'+str(epochsNum)+ '/'+  sensor_enc_model+'/'+ss_classifier+'/'
         if not os.path.isdir(ffolder):
               os.makedirs(ffolder,exist_ok=True)
         for k in terms_all: 
@@ -675,7 +589,9 @@ if __name__ == "__main__":
                         epochs  = config['curr_epoch']
                        
                         for e in epochs:
-                            
+                            ffolder = 'tanhresults_classifier/'+CPC_k+ '/B/Dim_'+str(j)+'/MaskAppliedafterEncoderPredict/Enc_GRU/Old_NoConcatAug/'+'k'+str(k)+'/epoch_'+str(e)+ '/'+  sensor_enc_model+'/'+ss_classifier+'/'
+                            if not os.path.isdir(ffolder):
+                                     os.makedirs(ffolder,exist_ok=True)
                             cpc_model='cpc_Models.h5'
                             testf_s,testacc_s,acc = classifier(res_dir = res_dir +'epoch_'+ str(e)+'/',cpc_model=cpc_model,ffolder =ffolder,latent=j)
                             accuracy_dict[res_dir +'epoch_'+ str(e)+'/'] = acc

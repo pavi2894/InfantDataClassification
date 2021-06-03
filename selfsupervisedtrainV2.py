@@ -5,7 +5,7 @@ import datetime
 import time
 import classifier_dataGenerator as dg
 import numpy as np
-import cleaned_configV3 as _CONF
+import cleaned_config as _CONF
 from sklearn.model_selection import train_test_split
 from os.path import join, basename, dirname, exists
 import keras
@@ -95,21 +95,67 @@ class NCE_loss:
           term = self.k  
           num = 0.0 
           if config['CPC_k']== 'only':
+              min_val = tf.float32.min
+              max_val = tf.float32.max
               mult = tf.multiply(y_true,y_pred)  
               num1 = tf.reduce_sum(mult,-1,keepdims = False)
+              #num1 = tf.clip_by_value(num1,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
               num = tf.math.exp(num1)
               #num +=  1e-6 
               denom = num + 1e-15
+              const = tf.zeros(denom.shape,  name=None,dtype = tf.float32)
+              const = tf.math.maximum(const, 1e-15)
               negative_sample_size = config['negative_sample_size']
               for k in range(negative_sample_size): 
-                  denom += tf.math.exp(tf.reduce_sum(tf.multiply(y_pred,neg[:,k,:]),-1,keepdims=False))   
-              self.error = -1*tf.reduce_mean(tf.math.log(1e-15 + (num/denom)))
-              print("Loss:", self.error,  " probability:", (1e-15 + (num/denom)), "  num:",num,"  denom:",denom)
+                  denom1 = tf.reduce_sum(tf.multiply(y_pred,neg[:,k,:]),-1,keepdims=False)
+                  #denom1 = tf.clip_by_value(denom1,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
+                  denom += tf.math.exp(denom1)   
+                  #denom = tf.clip_by_value(denom,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
+              #denom = tf.clip_by_value(denom,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
+              #num1 = tf.clip_by_value(num1,clip_value_min = min_val, clip_value_max = max_val)
+              #denom = tf.clip_by_value(denom,clip_value_min = min_val, clip_value_max = 0.99*tf.math.log(max_val))
+              #print()
+              #if denom.any() > max_val :
+              #         denom = tf.clip_by_value(denom,clip_value_min = min_val, clip_value_max = 0.99*tf.math.log(max_val))
+              #if num.any() > max_val :
+              #          num = tf.clip_by_value(num,clip_value_min = min_val, clip_value_max = max_val)
+              #self.error = -1*tf.reduce_mean(num1 - tf.math.log(denom))
+              """denom = tf.math.minimum(denom,max_val)
+              num = tf.math.minimum(num,max_val)"""
+              self.error = -1*tf.reduce_mean(tf.math.log((num/denom)+const))
+              #self.error = -1*tf.reduce_mean(tf.math.log(num) - tf.math.log(tf.math.maximum(denom,const)))
+              if(tf.math.is_nan(self.error)):
+                          #print("term is ", ee )
+                          print("Num is ",num)
+                          print("Num 1 is ",num1)
+                          print("denom is ",denom)
+                          print("denom / const is ",tf.math.maximum(denom,const))
+                          print("log denom,const is ", tf.math.log(tf.math.maximum(denom,const)))
+                          #print("Neg error_k = ",tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(tf.cast(denom,dtype = tf.float32), tf.cast(const,dtype = tf.float32)))))
+                          #print("Actua li s", -1*tf.reduce_mean(tf.math.log(tf.cast((num/denom)+tf.cast(const,dtype = tf.float32),dtype=tf.float32))))
+                          print("Actual error is ", tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom,const))))
+                          #print("denom / const is ",tf.math.maximum(denom, tf.cast(const,dtype = tf.float32)))
+                          #print("log denom,const is ", tf.math.log(tf.math.maximum(denom, tf.cast(const,dtype = tf.float32))))
+                          #print("Neg error_k = ",tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom, 1e-15))))
+                          sys.exit()
+              if(tf.math.is_inf(self.error)):
+                          print("Inf occured")
+                          #print("term is ", ee )
+                          print("Num is ",num)
+                          print("Num 1 is ",num1)
+                          print("denom is ",denom)
+                          print("denom / const is ",tf.math.maximum(denom,const))
+                          print("log denom,const is ", tf.math.log(tf.math.maximum(denom,const)))
+                          print("Actual error is ", tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom,const))))
+                          sys.exit()
+              #self.error = -1*tf.reduce_mean(tf.math.log(num) - tf.math.log(tf.math.maximum(denom,const)))
+              #print("Loss:", self.error,  " probability:", (1e-15 + (num/denom)), "  num:",num,"  denom:",denom)
           else:
               error = 0.0
-              print(y_pred.shape,"y_pred_")
-              print(y_true.shape,"y_true")
-              print(neg.shape, "neg.shape")
+              min_val = tf.float32.min
+              max_val = tf.float32.max
+              min_val =  tf.cast(min_val ,tf.float32)
+              max_val =  tf.cast(max_val ,tf.float32)
               for ee in range(term):
                   loss_k = 0.0
                   y_pred_k = y_pred[:,ee,:]
@@ -117,14 +163,64 @@ class NCE_loss:
                   neg_k = neg[ee,:,:,:]
                   mult = tf.multiply(y_true_k,y_pred_k)
                   num1 = tf.reduce_sum(mult,-1,keepdims = False)
+                  #num1 = tf.cast(num1,tf.float32) 
+
+                  #num1 = tf.clip_by_value(num1,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
                   num = tf.math.exp(num1)
                   denom = num + 1e-15
+                  #denom = tf.cast(denom,tf.float32)
+                  #num1 = tf.clip_by_value(num1,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
+                  const = tf.zeros(denom.shape,  name=None,dtype = tf.float32)
+                  const = tf.math.maximum(const, 1e-15)
                   negative_sample_size = config['negative_sample_size']
                   for k in range(negative_sample_size):
-                      denom += tf.math.exp(tf.reduce_sum(tf.multiply(y_pred_k,neg_k[:,k,:]),-1,keepdims=False)) 
-                      error_k = -1*tf.reduce_mean(tf.math.log((num/denom)+ 1e-15))
-                      error += error_k
+                      #denom += tf.cast(tf.math.exp(tf.reduce_sum(tf.multiply(y_pred_k,neg_k[:,k,:]),-1,keepdims=False)) ,dtype = tf.float64)
+                      denom1 = tf.reduce_sum(tf.multiply(y_pred_k,neg_k[:,k,:]),-1,keepdims=False)
+                      #denom1 = tf.clip_by_value(denom1,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))
+                      denom += tf.math.exp(denom1) 
+                  
+                  #num1 = tf.clip_by_value(num1,clip_value_min = min_val, clip_value_max = max_val)
+                  #denom = tf.clip_by_value(denom,clip_value_min = min_val, clip_value_max = 0.99*tf.math.log(max_val))
+                  """denom = tf.math.minimum(denom,max_val)
+                  num = tf.math.minimum(num,max_val)"""
+                  #if tf.math.reduce_max(denom) > max_val :
+                  #     denom = tf.clip_by_value(denom,clip_value_min = min_val, clip_value_max = 0.99*tf.math.log(max_val))
+                  #if num.any() > max_val :
+                  #      num = tf.clip_by_value(num,clip_value_min = min_val, clip_value_max = max_val)
+                  #denom = tf.clip_by_value(denom,clip_value_min = tf.cast((tf.float32.min),tf.float32), clip_value_max = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32)) 
+                  error_k = -1*tf.reduce_mean(tf.math.log((num/denom)+const))
+                  #error_k = tf.constant(np.nan) 
+                  if(tf.math.is_nan(error_k)):
+                          print("term is ", ee )
+                          print("Num is ",num)
+                          print("Num 1 is ",num1)
+                          print("denom is ",denom)
+                          print("denom / const is ",tf.math.maximum(denom,const))
+                          print("log denom,const is ", tf.math.log(tf.math.maximum(denom,const)))
+                          print("Erro is ",-1*tf.reduce_mean(tf.math.maximum((num1 - tf.math.log(denom)),const)))  
+                          #print("Neg error_k = ",tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(tf.cast(denom,dtype = tf.float32), tf.cast(const,dtype = tf.float32)))))
+                          #print("Actua li s", -1*tf.reduce_mean(tf.math.log(tf.cast((num/denom)+tf.cast(const,dtype = tf.float32),dtype=tf.float32))))
+                          print("Actual error is ", tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom,const))))
+                          #print("denom / const is ",tf.math.maximum(denom, tf.cast(const,dtype = tf.float32)))
+                          #print("log denom,const is ", tf.math.log(tf.math.maximum(denom, tf.cast(const,dtype = tf.float32))))
+                          #print("Neg error_k = ",tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom, 1e-15))))      
+                          sys.exit() 
+                  if(tf.math.is_inf(error_k)):
+                          print("Inf occured")   
+                          print("term is ", ee )
+                          print("Num is ",num)
+                          print("Num 1 is ",num1)
+                          print("denom is ",denom)
+                          print("denom / const is ",tf.math.maximum(denom,const))
+                          print("log denom,const is ", tf.math.log(tf.math.maximum(denom,const)))
+                          print("Erro is ",-1*tf.reduce_mean(tf.math.maximum((num1 - tf.math.log(denom)),const)))
+                          print("Actual error is ", tf.reduce_mean(num1 - tf.math.log(tf.math.maximum(denom,const))))
+                          sys.exit()
+                  error += error_k
+              #error = tf.clip_by_value(error,clip_value_min = tf.float32.min, clip_value_max = tf.float32.max)
+              """error =  tf.math.minimum(error,max_val)"""
               self.error = error   
+
           return self.error
 
 def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfile='log.txt', verbose=_CONF.verbose):
@@ -135,7 +231,7 @@ def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfil
     babies = ['Kotimittaus_VAURAS+33','Kotimittaus_VAURAS+34','Kotimittaus_VAURAS+35',
 'Kotimittaus_VAURAS34','Kotimittaus_VAURAS35','Kotimittaus_VAURAS39','Kotimittaus_VAURAS41_kaksoset',
 'Kotimittaus_VAURAS43','Kotimittaus_VAURAS46','Kotimittaus_VAURAS47','Kotimittaus_VAURAS51',
-'Kotimittaus_VAURAS58','Kotimittaus_VAURAS72','Kotimittaus_VAURAS73',
+'Kotimittaus_VAURAS58','Kotimittaus_VAURAS72','Kotimittaus_VAURAS73','Kotimittaus_VAURAS61',
 'Kotimittaus_VAURAS77','Kotimittaus_VAURAS78','Kotimittaus_VAURAS80','Kotimittaus_VAURAS81',
 'Kotimittaus_VV54','Kotimittaus_VV55','Kotimittaus_VV61','Kotimittaus_VV62','Kotimittaus_VV63',
 'Kotimittaus_VV_xx','Kotimittaus_pilot2','Kotimittaus_vaihe2_VAURAS82','Kotimittaus_vaihe2_VV64',
@@ -162,28 +258,37 @@ def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfil
     if config['self_supervised'] == 'CPC':
             if encoder_model == 'SENSOR_MODULE1':
                 sensor_module = modelcpc.SENSOR_MODULE1('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )
+            elif encoder_model == 'SENSOR_MODULE3_Modified':
+                sensor_module =  modelcpc.SENSOR_MODULE3_Modified('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )
+
             elif encoder_model == 'SENSOR_MODULE3':
                 sensor_module = modelcpc.SENSOR_MODULE3('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )    
             if config['CPC_k']== 'only':
 
                       timeseries_model =tf.keras.Sequential([ 
                              tf.keras.layers.GRU(units=gru_h, return_sequences= True,dropout=0.3, name='ar_context'),
-                             tf.keras.layers.Dense(units=gru_h, activation='linear')])
+                             tf.keras.layers.Dense(units=gru_h, activation='tanh')])
+                             #"""tf.keras.layers.Dense(units=gru_h, activation='linear')])"""
+                             #tf.keras.backend.clip(min_value = tf.cast((tf.float32.min),tf.float32), max_value = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))])
             else:
                      timeseries_model =tf.keras.Sequential([
                              tf.keras.layers.GRU(units=gru_h, return_sequences= True,dropout=0.3, name='ar_context'),
-                             tf.keras.layers.Dense(units=gru_h*k, activation='linear')])
+                             tf.keras.layers.Dense(units=gru_h*k, activation='tanh')])#, activity_regularizer=tf.keras.regularizers.l2(0.001))])
+                             #tf.keras.backend.clip(min_value = tf.cast((tf.float32.min),tf.float32), max_value = tf.cast(tf.math.log(0.99*tf.float32.max),tf.float32))])
 
-            sensor_enc =  sensor_module(x_r,training = False)
+            sensor_enc =  sensor_module(x_r,training = True)
             enc_model = tf.keras.Model(x_r,sensor_enc)
-            sens_enc = enc_model(x_r,training = False)
+            sens_enc = enc_model(x_r,training = True)
             sensor_enc1 = tf.expand_dims(sens_enc,axis = 0)
-            logit_activations = timeseries_model(sensor_enc1,training = False)#tf.keras.layers.TimeDistributed(timeseries_model)(sensor_op,training=False)
+            logit_activations = timeseries_model(sensor_enc1,training = True)#tf.keras.layers.TimeDistributed(timeseries_model)(sensor_op,training=False)
 
     if config['self_supervised'] == 'wav2vec':
             x_r = tf.keras.Input(shape = (_CONF.channels,_CONF.winlen))
             if encoder_model == 'SENSOR_MODULE1':
                 sensor_module = modelcpc.SENSOR_MODULE1('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )
+            elif encoder_model == 'SENSOR_MODULE3_Modified':
+                sensor_module =  modelcpc.SENSOR_MODULE3_Modified('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )
+
             elif encoder_model == 'SENSOR_MODULE3':
                 sensor_module = modelcpc.SENSOR_MODULE3('sensor_module', s_channels=_CONF.channels, latent_channels=gru_h//2, output_channels=gru_h, input_channels=_CONF.winlen, dropout_rate=0.3 )    
             if config['CPC_k'] == 'only':
@@ -256,7 +361,7 @@ def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfil
                          idxs = tf.range(_CONF.frames_per_sample)
                          curr_indx =  np.array([tt])
                          for yy in range(_CONF.frames_per_sample):
-                           curr_batch_sample_idx = [yy]    
+                           curr_batch_sample_idx = [yy+k]    
                            ridxs = tf.random.shuffle(idxs)#[:_CONF.frames_per_sample]
                            mask1 = tf.where( curr_batch_sample_idx[0] != ridxs ,ridxs,0) 
                            negIndxChoices = tf.boolean_mask(ridxs, mask1)
@@ -279,7 +384,7 @@ def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfil
                             idxs = tf.range(_CONF.frames_per_sample)
                             curr_indx =  np.array([tt])
                             for yy in range(_CONF.frames_per_sample):
-                                 curr_batch_sample_idx = [yy]
+                                 curr_batch_sample_idx = [yy+ps+1]
                                  ridxs = tf.random.shuffle(idxs)
                                  mask1 = tf.where( curr_batch_sample_idx[0] != ridxs ,ridxs,0)
                                  negIndxChoices = tf.boolean_mask(ridxs, mask1)
@@ -321,7 +426,7 @@ def train_model(model_dir,gru_h,k,R=None,model_name='test',randomseed=42, logfil
                            os.makedirs(model_dir+'epoch_'+str(e)+'/',exist_ok=True)
               model.save(join(model_dir+'epoch_'+str(e)+'/', 'cpc_Models.h5'))
               #tsneplot.invokeTSNE(res_dir = model_dir+'epoch_'+str(e)+'/',cpc_model= 'cpc_Models.h5',term = _CONF.terms,dim = _CONF.Nlatent,epoch = e) 
-    io.savemat('CPC_train_loss_results.mat', {'train_loss_results': train_loss_results})
+    io.savemat(model_dir+'CPC_train_loss_results.mat', {'train_loss_results': train_loss_results})
      
     model.save(join(model_dir, 'FinalCPC_'+str(e)+'.h5')) 
     fig, axes = plt.subplots(1, sharex=True, figsize=(12, 8))

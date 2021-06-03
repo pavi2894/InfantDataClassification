@@ -4,7 +4,7 @@ from sklearn.utils import shuffle
 #import data_generator as dg
 import classifier_dataGeneratorV2 as dg
 import numpy as np
-import cleaned_config as _CONF
+import cleaned_configV2 as _CONF
 from sklearn.model_selection import train_test_split
 from os.path import join, basename, dirname, exists
 import keras
@@ -73,7 +73,7 @@ dependencies = {
 
 
 def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.txt', verbose=_CONF.verbose):
-   f = open("ConfMatrix.txt", "a")    
+   f = open(model_dir+"ConfMatrix.txt", "a")    
 
    babies = ['Kotimittaus_VAURAS35','Kotimittaus_VAURAS38','Kotimittaus_VAURAS39',
 'Kotimittaus_VAURAS41_kaksoset','Kotimittaus_VAURAS42_kaksoset','Kotimittaus_VAURAS43',
@@ -82,17 +82,27 @@ def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.t
 'Kotimittaus_VV_xx','Kotimittaus_pilot1','Kotimittaus_pilot2','baby10','baby11','baby12',
 'baby13','baby14','baby15','baby16','baby17','baby18','baby19','baby20','baby21','baby22',
 'baby23','baby24','baby25','baby26','baby3','baby4','baby5','baby6','baby7','baby8','baby9']
-   folder = 'ClassifierlabeledPreprocess_data/'
+   #folder = 'ClassifierlabeledPreprocess_data/'
    samples = _CONF.testTrainRatio*len(babies)
    f.write("tf.test.is_gpu_available()" + str(tf.test.is_gpu_available())+"\n")
    f.write("GPU device :" + tf.test.gpu_device_name()+"\n")
    f.write("TF version is " + tf.__version__ +"\n")
-   
+   half_baby = len(babies)//2
    test_babydict = {}
    macro_avg = [-1]*_CONF.folds
+   np.random.seed(42)
+   np.random.shuffle(babies)#,seed = 42)
+   babies = babies[:half_baby]
+   folds = _CONF.folds
+   test_size = int(len(babies)/folds)
+
+
    for k in range(_CONF.folds):
     f.write("\n\n Fold is "+ str(k))
-    test_babies = random.sample(babies, int(samples))
+    if k+1 != folds:
+           test_babies = babies[k*test_size : (k+1)*test_size]
+    else:
+           test_babies = babies[k*test_size : ]
     print("test_babies ", test_babies)
     train_babies = np.setdiff1d(babies, test_babies)
     
@@ -106,20 +116,22 @@ def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.t
     
     file_names = io.loadmat(fileName_train)['Input_fileNames']
     filenames_shuffled = shuffle(file_names)
-    np.save(folder + 'labeledShuffledInputfileNames.npy',filenames_shuffled)#{'filenames_shuffled':filenames_shuffled})
-    X_train_filenames, X_val_filenames = train_test_split(filenames_shuffled, test_size=_CONF.testTrainRatio, random_state=1)
+    #np.save(folder + 'labeledShuffledInputfileNames.npy',filenames_shuffled)#{'filenames_shuffled':filenames_shuffled})
+    #X_train_filenames, X_val_filenames = train_test_split(filenames_shuffled, test_size=_CONF.testTrainRatio, random_state=1)
     
     file_names2 = io.loadmat(fileName_test)['Input_fileNames']
     filenames_shuffled2 = shuffle(file_names2)
-    np.save(folder + 'labeledTestShuffledInputfileNames.npy',filenames_shuffled2)#{'filenames_shuffled':filenames_shuffled})
+    #np.save(folder + 'labeledTestShuffledInputfileNames.npy',filenames_shuffled2)#{'filenames_shuffled':filenames_shuffled})
     DG_test = dg.My_ClassifierCustom_Generator(filenames_shuffled2,_CONF.batch_size,training = False)
 
 
-    DG_train = dg.My_ClassifierCustom_Generator(X_train_filenames,_CONF.batch_size)
-    DG_valid = dg.My_ClassifierCustom_Generator(X_val_filenames,_CONF.batch_size,training = False)
+    #DG_train = dg.My_ClassifierCustom_Generator(X_train_filenames,_CONF.batch_size)
+    DG_train = dg.My_ClassifierCustom_Generator(filenames_shuffled,_CONF.batch_size)
+    #DG_valid = dg.My_ClassifierCustom_Generator(X_val_filenames,_CONF.batch_size,training = False)
     code_size = _CONF.Nlatent2
     x_r = tf.keras.Input(shape = (24,120))
-    sensor_module3 = modelcpc.SENSOR_MODULE1('sensor_module', s_channels=24, latent_channels=_CONF.Nlatent//2, output_channels=_CONF.Nlatent, input_channels=_CONF.winlen, dropout_rate=0.3 )
+    
+    sensor_module3 = modelcpc.SENSOR_MODULE3('sensor_module', s_channels=24, latent_channels=_CONF.Nlatent//2, output_channels=_CONF.Nlatent, input_channels=_CONF.winlen, dropout_rate=0.3 )
   
     
     timeseries_model = modelcpc.WaveNet("wavenet", residual_channels=_CONF.Nlatent2, output_channels=_CONF.NcatsB, input_channels=_CONF.Nlatent, 
@@ -196,21 +208,21 @@ def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.t
         print("Epoch {:03d}: Loss: {:.3f}, Accuracy: {:.3%}".format(e,
                                                                 loss_epoch,
                                                                 acc_epoch))
-        if e % 20 == 0:
+        if e % 99 == 0:
              
 
-              y_pred  = model.predict(DG_valid)  
+              y_pred  = model.predict(DG_test)  
               predicted_categories = tf.argmax(y_pred, axis=1)
-              y_true = tf.concat([y for x, y,z in DG_valid], axis=0)
-              y_mask = tf.concat([z for x, y,z in DG_valid], axis=0)
+              y_true = tf.concat([y for x, y,z in DG_test], axis=0)
+              y_mask = tf.concat([z for x, y,z in DG_test], axis=0)
               mask = tf.cast(1-y_mask,tf.bool)
               true_categories = tf.argmax(y_true, axis=1)
-              M1 = tf.math.confusion_matrix(predicted_categories, true_categories,num_classes= _CONF.Ncats)
+              #M1 = tf.math.confusion_matrix(predicted_categories, true_categories,num_classes= _CONF.Ncats)
               M2 = tf.math.confusion_matrix(predicted_categories[mask], true_categories[mask],num_classes= _CONF.Ncats)
              
-              target_names = ['class '+str(i) for i in np.arange(_CONF.Ncats)]
-              classification_report1 = classification_report(true_categories,predicted_categories,target_names= target_names)
-              classification_report2 = classification_report(true_categories[mask],predicted_categories[mask],target_names= target_names)   
+              target_names = [i for i in np.arange(_CONF.Ncats)]
+              #classification_report1 = classification_report(true_categories,predicted_categories,target_names= target_names)
+              classification_report2 = classification_report(true_categories[mask],predicted_categories[mask],labels= target_names)   
               macro_avgvalues  = precision_recall_fscore_support(true_categories[mask],predicted_categories[mask],average = 'macro')
               f.write("Macro average prec,rec,fsore,None is " + str(macro_avgvalues))
               macro_avgvalue = macro_avgvalues[2]
@@ -223,13 +235,13 @@ def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.t
                           best_epoch = e  
                           model.save(join(model_dir, 'supervised_kfold_' + str(k) +'_.h5'))
               
-              f.write("The confusion matrix is for epoch "+str(e)+ " is "+"\n" + str(M1)+"\n")
+              #f.write("The confusion matrix is for epoch "+str(e)+ " is "+"\n" + str(M1)+"\n")
               f.write("The confusion matrix 2 with mask for epoch "+str(e)+ " is "+"\n" + str(M2)+"\n")
-              f.write("classification_report :\n"+classification_report1+"\n")
+              #f.write("classification_report :\n"+classification_report1+"\n")
               f.write("classification_report 2 with mask :\n"+classification_report2+"\n\n\n")
               
-    io.savemat('train_loss_results.mat', {'train_loss_results': train_loss_results})
-    io.savemat('train_accuracy_results.mat', {'train_accuracy_results': train_accuracy_results})
+    io.savemat(model_dir+'train_loss_results'+str(k)+'.mat', {'train_loss_results': train_loss_results})
+    io.savemat(model_dir+'train_accuracy_results'+str(k)+'.mat', {'train_accuracy_results': train_accuracy_results})
 
 
     model.save(join(model_dir, 'Finalsupervised_fold_'+str(k)+'.h5'))
@@ -245,20 +257,20 @@ def train_model(model_dir,R=None,model_name='test',randomseed=42, logfile='log.t
     axes[1].set_xlabel("Epoch", fontsize=14)
     axes[1].plot(train_accuracy_results)
     plt.show()
-    plt.savefig('fold_'+str(k)+'_TraininLossAccuracy.png')
-   print(macro_avg, "is macro avg and maximum is ", max(macro_avg), "at index :",macro_avg.index(max(macro_avg)))   
+    plt.savefig(model_dir + 'fold_'+str(k)+'_TraininLossAccuracy.png')
+   print(macro_avg, " is F-scores of foldss and average is ", np.mean(macro_avg), "and SD is :",np.std(macro_avg))   
    idx_k = macro_avg.index(max(macro_avg))
    final_testbabies = test_babydict.get(idx_k)
    f.write("The best performing model is index of kfold," + str(idx_k) + " and the tets babies used are " + str(final_testbabies) + 'Finalsupervised_fold_'+str(idx_k)+'.h5' )
    f.close()
    model1 = keras.models.load_model(join(model_dir, 'Finalsupervised_fold_'+str(idx_k)+'.h5'),custom_objects=dependencies)
    model1.save(join(model_dir, 'supervised.h5'))   
-   np.save('Supervised_testbabies.npy', final_testbabies)
+   np.save(model_dir+'Supervised_testbabies.npy', final_testbabies)
    print("SUCCESS")
    return
        
 if __name__ == "__main__":
-    result_dir = 'test-results2/'
+    result_dir = 'supervised_results/half_num_baby/'
     for i in _CONF.Ntrack:
         res_dir = result_dir + i + '/'
         if not os.path.isdir(res_dir):

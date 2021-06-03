@@ -11,10 +11,10 @@ import keras
 from matplotlib import pyplot as plt
 import tensorflow as tf
 from keras import backend as K
-import trainmodel_cpcV2 as modelcpc
+import trainmodel_cpcV3 as modelcpc
 import labelsArrange as la
 import random
-import selfsupervisedtrain as train
+import selfsupervisedtrainV3 as train
 import os
 import sys
 from sklearn.metrics import classification_report
@@ -54,6 +54,7 @@ Ncats = config['Ncats']
 dependencies = {
     'SENSOR_MODULE3' : modelcpc.SENSOR_MODULE3,
     'SENSOR_MODULE1' : modelcpc.SENSOR_MODULE1,
+    'SENSOR_MODULE3_Modified' : modelcpc.SENSOR_MODULE3_Modified,
     'sensorEncoderModule':modelcpc.sensorEncoderModule,
     'WaveNet' : modelcpc.WaveNet,
     'Resblock' : modelcpc.Resblock
@@ -133,8 +134,9 @@ if __name__ == "__main__":
 
 
     #OR test_babies = np.load('Supervised_testbabies.npy')
-
-    fileName_test=la.getlabeledFileNames(test_babies,folder = 'Test_Data/',data_folder = 'labeled_DATA/',test = True)
+    if not os.path.isdir('Train_Data/'):
+                         os.makedirs('Train_Data/',exist_ok=True)
+    fileName_test=la.getlabeledFileNames(babies,folder = 'Train_Data/',data_folder = 'labeled_DATA/',test = True)
     file_names2 = io.loadmat(fileName_test)['Input_fileNames']
     filenames_shuffled2 = shuffle(file_names2)
     DG_test = dg.My_ClassifierCustom_Generator(filenames_shuffled2,config['batch_size'],training = False)
@@ -152,7 +154,7 @@ if __name__ == "__main__":
     true_categories = tf.argmax(y_true, axis=1)
     true_poscategories = tf.argmax(y_pos,axis=1)
 
-    tsne = TSNE(n_components=2, init = 'pca',verbose=0, perplexity=25, n_iter=500, learning_rate = 400 )
+    tsne = TSNE(n_components=2, init = 'pca',verbose=0, perplexity= 40, n_iter=1000, learning_rate = 400 )
     result_dir = config['model_dir']
     terms_all = config['terms_all']
     latent_spaceDimensions =config['latent_spaceDimensions']

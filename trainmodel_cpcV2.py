@@ -379,7 +379,8 @@ class SENSOR_MODULE1(tf.keras.layers.Layer):
         self.dropout_layer = tf.keras.layers.Dropout(rate=dropout_rate)
         self.sensormoduleLayer = sensorEncoderModule1(latent_channels,input_channels)
         self.conv1d = tf.keras.layers.Conv1D(filters = output_channels,kernel_size= 4,padding='SAME') 
-        self.conv1db = tf.keras.layers.Conv1D(filters = output_channels,kernel_size= 4,padding='VALID')
+        self.conv1db = tf.keras.layers.Conv1D(filters = output_channels,kernel_size= 4,padding='VALID',activation ='tanh')#,activity_regularizer=tf.keras.regularizers.l2(0.01))
+        
     def get_config(self):
         config = super().get_config().copy()
         config.update({
@@ -405,6 +406,8 @@ class SENSOR_MODULE1(tf.keras.layers.Layer):
         Y = tf.keras.layers.LeakyReLU(alpha=0.3)(Y)
         
         Y = tf.reshape(Y,[-1,self.output_channels])
+        #Y = tf.keras.backend.clip(Y,max_value = tf.math.log(0.95* tf.float32.max))
+        #Y = tf.keras.backend.clip(Y,min_value = tf.cast((tf.float32.min),tf.float32), max_value = tf.cast(tf.math.log(0.95* tf.float32.max),tf.float32))
         return Y
 
 
@@ -427,7 +430,7 @@ class SENSOR_MODULE3(tf.keras.layers.Layer):  #output : (150, 160)
         self.conv1d = tf.keras.layers.Conv1D(filters = output_channels//4,kernel_size= 4,padding='VALID',strides=4) 
         self.conv1db = tf.keras.layers.Conv1D(filters = output_channels//4,kernel_size= 4,padding='SAME')
         self.out1 = tf.keras.layers.Conv1D(filters= output_channels, kernel_size = 5,strides = 1,padding= 'SAME')
-        self.out2 = tf.keras.layers.Conv1D(filters= output_channels, kernel_size = 5,strides = 1,padding= 'SAME')
+        self.out2 = tf.keras.layers.Conv1D(filters= output_channels, kernel_size = 5,strides = 1,padding= 'SAME',activation ='tanh')#,activity_regularizer=tf.keras.regularizers.l2(0.01))
                 
     def get_config(self):
         config = super().get_config().copy()
@@ -455,4 +458,61 @@ class SENSOR_MODULE3(tf.keras.layers.Layer):  #output : (150, 160)
         Y = self.conv1db(Y)
         Y = tf.keras.layers.LeakyReLU(alpha=0.3)(Y)
         Y = tf.reshape(Y,[-1,self.output_channels])
+        #print("Y shape is ",Y)
+        #Y = tf.keras.backend.clip(Y,min_value = tf.cast((tf.float32.min),tf.float32), max_value = tf.cast(tf.math.log(0.95* tf.float32.max),tf.float32))
+        #Y = tf.keras.backend.clip(Y,min_value = (1/tf.float64.max), max_value = tf.math.log(0.95* tf.float32.max))
+        return Y
+
+
+
+
+class SENSOR_MODULE3_Modified(tf.keras.layers.Layer):  #output : (150, 160)
+    def __init__(self,name, s_channels=24, latent_channels=16, output_channels=128, input_channels=256, dropout_rate=0.3, **kwargs ):
+        super(SENSOR_MODULE3_Modified, self).__init__(name=name)
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.latent_channels = latent_channels
+        self.r = np.int32(s_channels/2)
+        self.r_dims = np.int32(np.ceil(self.input_channels/10)) -1
+        #self._name = name
+        self.dropout_rate = dropout_rate
+        self.s_channels = s_channels
+        self.dropout_layer = tf.keras.layers.Dropout(rate=dropout_rate)
+        self.sensormoduleLayer = sensorEncoderModule(latent_channels,input_channels)
+        self.conv1d = tf.keras.layers.Conv1D(filters = output_channels//4,kernel_size= 4,padding='VALID',strides=4)
+        self.conv1db = tf.keras.layers.Conv1D(filters = output_channels//4,kernel_size= 4,padding='SAME')
+        self.out1 = tf.keras.layers.Conv1D(filters= output_channels, kernel_size = 5,strides = 1,padding= 'SAME')
+        self.out2 = tf.keras.layers.Conv1D(filters= output_channels, kernel_size = 5,strides = 1,padding= 'SAME')
+        self.dense1  = tf.keras.layers.Dense(units = self.output_channels,activation = 'relu')
+        self.dense2 = tf.keras.layers.Dense(units = self.output_channels,activation ='tanh')#,activity_regularizer=tf.keras.regularizers.l2(0.01))
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+        'input_channels' : self.input_channels,
+        'output_channels' : self.output_channels,
+        'latent_channels' : self.latent_channels ,
+        'dropout_rate' : self.dropout_rate,
+        's_channels' : self.s_channels
+        })
+        return config
+    def call(self, X_input, training=False):
+        X_input = self.dropout_layer(X_input,training=training)
+
+        X_input = tf.expand_dims(X_input, axis=-1)
+        X1 = X_input[:,:self.r,:,:] # Acc data
+        X2 = X_input[:,self.r:,:,:] # Gyro data
+        X1,X2,X3 = self.sensormoduleLayer(X1,X2,X_input,training )
+        X_f = tf.concat([X1,X2,X3],axis=1) # -> (Nframes, 16, l)
+        idx = (0,4,8,12,1,5,9,13,2,6,10,14,3,7,11,15)
+        o = self.output_channels
+        X_f = tf.gather(X_f,idx,axis = 1)
+        X_f = self.conv1d(X_f)
+        Y = tf.keras.layers.LeakyReLU(alpha=0.3)(X_f)
+        Y = self.conv1db(Y)
+        Y = tf.keras.layers.LeakyReLU(alpha=0.3)(Y)
+        Y = tf.reshape(Y,[-1,self.output_channels])
+        Y = self.dense1(Y) 
+        Y = self.dense2(Y)   
+        #Y = tf.keras.backend.clip(Y,max_value = tf.math.log(0.95* tf.float32.max))
+        #/tf.keras.backend.clipY = tf.keras.backend.clip(Y,min_value = tf.cast((tf.float32.min),tf.float32), max_value = tf.cast(tf.math.log(0.95* tf.float32.max),tf.float32))
         return Y
